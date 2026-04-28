@@ -1,0 +1,72 @@
+{
+  "tiers": {
+    "free": {
+      "allowed_models": [
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "openai/meta-llama/Llama-3.1-8B-Instruct",
+        "gpt-4o-mini",
+        "ollama/llama3.1:8b"
+      ],
+      "max_tokens": 1024
+    },
+    "pro": {
+      "allowed_models": [
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "openai/meta-llama/Llama-3.1-8B-Instruct",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "claude-3-5-haiku-latest",
+        "claude-3-5-sonnet-latest",
+        "ollama/llama3.1:8b"
+      ],
+      "max_tokens": 4096
+    },
+    "enterprise": {
+      "allowed_models": [
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "openai/meta-llama/Llama-3.1-8B-Instruct",
+        "claude-3-5-sonnet-latest",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "ollama/llama3.1:8b"
+      ],
+      "max_tokens": 16000
+    }
+  },
+  "restricted_regions": [],
+  "sensitive_safe_models": [
+    "ollama/llama3.1:8b",
+    "meta-llama/Llama-3.1-8B-Instruct"
+  ],
+  "resource_role_map": {
+    "billing": ["admin", "finance"],
+    "hr": ["admin", "hr"],
+    "infra": ["admin", "engineer", "sre"],
+    "secrets": ["admin"],
+    "audit": ["admin", "analyst"]
+  },
+  "allowed_pii_regions": ["EU", "US", "global", "in", "apac"],
+  "deny_intents": [
+    "data_exfiltration",
+    "credential_request",
+    "policy_override_request"
+  ],
+  "review_intents": ["infrastructure_change", "mass_data_export"],
+  "local_model_intents": ["internal_q_and_a", "compliance_question"],
+  "strict_rate_intents": ["code_generation", "web_search"],
+  "intent_classes": [
+    "general_chat",
+    "data_extraction",
+    "privilege_escalation",
+    "code_generation",
+    "compliance_question",
+    "creative",
+    "internal_q_and_a",
+    "policy_override_request",
+    "credential_request",
+    "rag_q_and_a",
+    "infrastructure_change",
+    "mass_data_export",
+    "data_exfiltration"
+  ]
+}

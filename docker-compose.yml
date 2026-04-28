@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinelguard}
+    # If 5432 is already in use (local Postgres, another container), use 5433 on the host.
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # libpq default DB name = username; POSTGRES_DB is sentinelguard, so -d is required
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Use a published tag (Docker Hub: openpolicyagent/opa — not `X.Y.Z-rootless`; use
+  # `latest-rootless` for rootless, or a plain semver like `0.68.0` for the default image.)
+  opa:
+    image: openpolicyagent/opa:0.68.0
+    restart: unless-stopped
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "/policies"
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./infra/opa/policies:/policies:ro
+
+  code-sandbox:
+    build:
+      context: ./infra/sandbox
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # No host port; internal only. Backend uses CODE_SANDBOX_URL=http://code-sandbox:8888
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@postgres:5432/${POSTGRES_DB:-sentinelguard}
+      REDIS_URL: redis://redis:6379/0
+      OPA_URL: http://opa:8181
+      CODE_SANDBOX_URL: http://code-sandbox:8888
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opa:
+        condition: service_started
+      code-sandbox:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - ./datasets:/datasets:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_SENTINEL_KEY: ${SENTINEL_API_KEY:-demo-key}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
