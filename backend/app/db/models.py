@@ -175,6 +175,21 @@ class AuditEvent(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
 
 
+class UserMemory(Base):
+    """Long-term per-user memory promoted from STM on session end."""
+
+    __tablename__ = "user_memory"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    conv_id: Mapped[str] = mapped_column(String(64), index=True)
+    last_intent: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    entities: Mapped[list] = mapped_column(JSON, default=list)
+    tool_executions: Mapped[list] = mapped_column(JSON, default=list)
+    turn_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
 class AgentTrace(Base):
     """Persisted supervisor / specialist steps for Agent Trace replay."""
 

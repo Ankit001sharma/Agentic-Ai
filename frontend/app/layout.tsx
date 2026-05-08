@@ -1,27 +1,23 @@
-import "./globals.css";
 import type { Metadata } from "next";
-import { Nav } from "@/components/Nav";
-import { AlertToast } from "@/components/AlertToast";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { Providers } from "./providers";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+});
 
 export const metadata: Metadata = {
   title: "SentinelGuard — AI Security Gateway",
-  description:
-    "Agentic AI security gateway: parallel scanners, 4-tier risk gate, OPA, model routing, HITL review, adaptive learning.",
+  description: "Production dashboard for the SentinelGuard 14-stage security pipeline.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
-        <div className="flex min-h-screen">
-          <Nav />
-          <main className="flex-1 p-6 overflow-x-hidden">{children}</main>
-        </div>
-        <AlertToast />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} font-sans antialiased`}>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

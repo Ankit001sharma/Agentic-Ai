@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.core.config import get_settings
-from app.schemas.sentinel import Finding, Verdict
+from app.schemas.sentinel import Finding, ScanState, Verdict
 
 # Per-category contribution weights (0..100 of the 100-point budget)
 CATEGORY_WEIGHTS: dict[str, float] = {
@@ -13,7 +13,7 @@ CATEGORY_WEIGHTS: dict[str, float] = {
     "SYSTEM_PROMPT_EXTRACTION": 30.0,
     "HIDDEN_INSTRUCTION": 25.0,
     "PII": 22.0,
-    "SECRET": 28.0,
+    "SECRET": 80.0,   # severity 0.6 → score 48 (MASK); severity 1.0 → score 80 (MASK→BLOCK boundary)
     "TOXIC": 25.0,
     "CODE_IP": 18.0,
     "REPEAT_ATTACK": 25.0,
@@ -51,6 +51,16 @@ def aggregate(findings: list[Finding], historical_risk: float = 0.0) -> tuple[in
     breakdown["_bonus"] = bonus
     breakdown["_historical"] = historical
     return score, breakdown
+
+
+def effective_risk_breakdown(state: ScanState) -> tuple[int, dict[str, float]]:
+    """Same aggregation as RiskAggregatorAgent — use before state.risk is set."""
+    return aggregate(state.findings, historical_risk=state.user.historical_risk)
+
+
+def effective_risk_score(state: ScanState) -> int:
+    """0..100 score from current findings (ignores stale state.risk)."""
+    return effective_risk_breakdown(state)[0]
 
 
 def to_verdict(score: int) -> Verdict:

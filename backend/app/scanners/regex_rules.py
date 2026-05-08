@@ -166,3 +166,7 @@ class RegexScanner:
                 # Only one finding per rule to avoid noise
                 break
         return ScannerResult(findings=findings, score=max_severity)
+
+
+# Alias used by pipeline stages that reference the descriptor-style name
+RegexRulesScanner = RegexScanner

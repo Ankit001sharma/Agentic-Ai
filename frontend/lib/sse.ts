@@ -8,6 +8,7 @@ export type LiveEvent = {
   request_id?: string;
   user?: string;
   tier?: string;
+  conv_id?: string;
   model_used?: string;
   model_requested?: string;
   fallback?: boolean;
@@ -16,20 +17,21 @@ export type LiveEvent = {
   risk?: number;
   output_risk?: number;
   latency_ms?: number;
+  pipeline_stage?: number;
+  intent?: string;
+  tool_id?: string;
+  tool_executed?: boolean;
+  simulated?: boolean;
   categories_in?: string[];
   categories_out?: string[];
   prompt_preview?: string;
   response_preview?: string;
-  before_after?: {
-    prompt_before?: string;
-    prompt_after?: string;
-    response_before?: string;
-    response_after?: string;
-  };
+  pipeline_error?: unknown;
   ts?: number;
+  sentinel?: Record<string, unknown>;
 };
 
-export function useLiveEvents(maxItems = 50): LiveEvent[] {
+export function useLiveEvents(maxItems = 80): LiveEvent[] {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const ref = useRef<EventSource | null>(null);
 
@@ -47,10 +49,8 @@ export function useLiveEvents(maxItems = 50): LiveEvent[] {
     };
     es.addEventListener("message", handler);
     es.addEventListener("request", handler);
-    es.addEventListener("review.pending", handler);
-    es.addEventListener("review.decided", handler);
     es.onerror = () => {
-      // browser will auto-reconnect
+      /* browser reconnects */
     };
     return () => {
       es.close();

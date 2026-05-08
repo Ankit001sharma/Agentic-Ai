@@ -96,7 +96,7 @@ _STRONG = ["claude-3-5-sonnet-latest", "gpt-4o"]
 # Cheap, fast models (used for low-complexity / cost-aware routing).
 _CHEAP = ["gpt-4o-mini", "claude-3-5-haiku-latest"]
 # Local / private model for sensitive workloads.
-_LOCAL = ["ollama/llama3.1:8b"]
+_LOCAL: list[str] = []  # override via TASK_PREFERENCE or vllm_first chain when configured
 
 # Coding tasks tend to favor Claude Sonnet / GPT-4o; cheap fallback for trivial snippets.
 TASK_PREFERENCE: dict[str, dict[str, list[str]]] = {
@@ -134,15 +134,11 @@ TASK_PREFERENCE: dict[str, dict[str, list[str]]] = {
 
 
 def _vllm_preferred_chain(settings: Any) -> list[str] | None:
-    """If vLLM is configured, prefer vLLM model id, then ollama, then default cloud."""
+    """If vLLM is configured, prefer vLLM model id, then default cloud (if allowed)."""
     if not settings.vllm_base_url or not (settings.vllm_assistant_model or settings.vllm_planner_model):
         return None
     m = settings.vllm_assistant_model or settings.vllm_planner_model
     chain = [m]
-    if settings.ollama_model:
-        om = f"ollama/{settings.ollama_model}" if not str(settings.ollama_model).startswith("ollama/") else settings.ollama_model
-        if om not in chain:
-            chain.append(om)
     if settings.default_model and settings.default_model not in chain and settings.allow_cloud_fallback:
         chain.append(settings.default_model)
     return chain

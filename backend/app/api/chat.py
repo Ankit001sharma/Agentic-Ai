@@ -1,11 +1,13 @@
-"""OpenAI Chat Completions-compatible endpoint."""
+"""OpenAI Chat Completions-compatible endpoint — routes to 14-stage pipeline."""
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
-from app.agents.graph import run_pipeline
 from app.api.deps import get_user_context, require_api_key
+from app.pipeline.runner import run_pipeline
 from app.schemas.openai import (
     ChatCompletionChoice,
     ChatCompletionRequest,
@@ -23,25 +25,12 @@ from app.services.file_extract import (
 router = APIRouter()
 
 
-def _flatten_messages(messages: list[ChatMessage]) -> str:
-    """Concatenate a chat history into a single 'prompt' string for scanning.
-
-    For MVP simplicity we focus our scanners on the latest user turn; system /
-    assistant turns are concatenated for context but not weighted heavily.
-    """
-    parts = []
-    for m in messages:
-        role = m.role
-        content = m.content or ""
-        parts.append(f"[{role}] {content}")
-    return "\n".join(parts)
-
-
 def _last_user_text(messages: list[ChatMessage]) -> str:
     for m in reversed(messages):
         if m.role == "user" and m.content:
             return m.content
-    return _flatten_messages(messages)
+    parts = [f"[{m.role}] {m.content or ''}" for m in messages]
+    return "\n".join(parts)
 
 
 @router.post("/chat/completions", response_model=ChatCompletionResponse)
@@ -51,17 +40,16 @@ async def chat_completions(
     _: str = Depends(require_api_key),
     user: UserContext = Depends(get_user_context),
     x_sensitivity: str | None = Header(default=None),
+    x_conv_id: str | None = Header(default=None),
 ):
     if body.stream:
-        raise HTTPException(status_code=400, detail="Streaming not supported in MVP")
+        raise HTTPException(status_code=400, detail="Streaming not supported")
 
     original_prompt = _last_user_text(body.messages)
     sensitivity = (x_sensitivity or "normal").lower()
+    conv_id = x_conv_id or uuid.uuid4().hex[:16]
+    redis_client = request.app.state.redis
 
-    # Extract attachments (text, code, PDF, DOCX, images) and merge their text
-    # into the prompt so every existing scanner runs over the file contents
-    # exactly like a regular prompt — catching prompt injection / PII / secrets
-    # hidden inside an upload.
     attachment_summaries: list[dict] = []
     prompt = original_prompt
     if body.attachments:
@@ -73,16 +61,16 @@ async def chat_completions(
                 status_code=413,
                 detail={"error": err, "attachments": attachment_summaries},
             )
-        # Run multimodal vision description on image attachments (if enabled
-        # and credentials are configured) so the resulting text flows through
-        # every scanner exactly like OCR / file content.
         await enrich_with_vision(extracted)
         attachment_summaries = [a.to_summary() for a in extracted]
         prompt = merge_into_prompt(original_prompt, extracted)
 
     state = await run_pipeline(
-        user=user,
         prompt=prompt,
+        user=user,
+        conv_id=conv_id,
+        redis_client=redis_client,
+        simulate=False,
         requested_model=body.model,
         sensitivity=sensitivity,
     )
@@ -91,6 +79,7 @@ async def chat_completions(
 
     sentinel_payload = {
         "request_id": state.request_id,
+        "conv_id": conv_id,
         "verdict": state.verdict.value,
         "output_verdict": state.output_verdict.value,
         "risk": state.risk,
@@ -107,14 +96,10 @@ async def chat_completions(
         "opa_reasons": state.opa_reasons,
         "latency_ms": state.latency_ms,
         "attachments": attachment_summaries,
-        "explanation": state.explanation,
-        "confidence": state.confidence,
         "intent": state.intent,
-        "agentic_trace_version": state.agentic_trace_version,
-        "agent_steps": state.agent_steps,
-        "agent_findings": state.agent_findings,
-        "self_corrections": state.self_corrections,
-        "reflections": state.reflections,
+        "tool_id": state.tool_id,
+        "tool_executed": state.tool_executed,
+        "pipeline_stage": state.pipeline_stage,
     }
 
     if state.verdict == Verdict.BLOCK:

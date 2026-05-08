@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analytics, chat, events, policies, review
+from app.api import admin, analytics, catalog, chat, events, gateway_health, inspect, keys, policies, review
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.db.session import init_db
@@ -18,13 +19,20 @@ from app.llm.vllm_probe import probe_vllm_tooling
 async def lifespan(app: FastAPI):
     configure_logging()
     log = get_logger("sentinelguard")
-    log.info("starting", version="0.1.0")
+    s = get_settings()
+    log.info("starting", version="0.2.0", mode="pipeline")
+
+    # Shared Redis client for STM, high-impact gate, and pipeline events
+    app.state.redis = aioredis.from_url(s.redis_url, decode_responses=True)
+
     try:
         await probe_vllm_tooling()
     except Exception as e:  # noqa: BLE001
         log.warning("vllm_probe_error", error=str(e))
     await init_db()
     yield
+
+    await app.state.redis.aclose()
     log.info("shutdown")
 
 
@@ -32,8 +40,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="SentinelGuard",
-        version="0.1.0",
-        description="Agentic AI Security Gateway",
+        version="0.2.0",
+        description="AI Security Gateway — 14-Stage Sequential Pipeline",
         lifespan=lifespan,
     )
 
@@ -55,12 +63,23 @@ def create_app() -> FastAPI:
     app.include_router(review.router, prefix="/api/review", tags=["review"])
     app.include_router(policies.router, prefix="/api/policies", tags=["policies"])
     app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+    app.include_router(inspect.router, prefix="/api/inspect", tags=["inspect"])
+    app.include_router(gateway_health.router, prefix="/api/system/health", tags=["system"])
+    app.include_router(keys.router, prefix="/api/keys", tags=["keys"])
+    app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
+
+    # 14-stage pipeline endpoint + session lifecycle
+    from app.api.pipeline_chat import router as pipeline_router
+    from app.api.session import router as session_router
+    app.include_router(pipeline_router, prefix="/api/v2", tags=["pipeline"])
+    app.include_router(session_router, prefix="/api/v2", tags=["pipeline"])
 
     @app.get("/", tags=["health"])
     async def root():
         return {
             "name": "SentinelGuard",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "status": "ok",
             "docs": "/docs",
         }

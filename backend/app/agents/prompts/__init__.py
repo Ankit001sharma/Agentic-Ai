@@ -1,1 +1,1 @@
-"""Prompt templates for agentic pipelines."""
+# Pipeline LLM prompt builders.

@@ -6,25 +6,25 @@ from app.core.config import get_settings
 
 # Per-tier ordered preference list (cheap first, with a pro upgrade path)
 TIER_PREFERENCE: dict[str, list[str]] = {
-    "free": ["gpt-4o-mini", "ollama/llama3.1:8b"],
+    "free": ["gpt-4o-mini"],
     "pro": [
         "gpt-4o-mini",
         "claude-3-5-haiku-latest",
         "claude-3-5-sonnet-latest",
         "gpt-4o",
-        "ollama/llama3.1:8b",
     ],
     "enterprise": [
         "claude-3-5-sonnet-latest",
         "gpt-4o",
         "claude-3-5-haiku-latest",
         "gpt-4o-mini",
-        "ollama/llama3.1:8b",
     ],
 }
 
-# When sensitivity == "high", route to local-only models
-SENSITIVE_PREFERENCE: list[str] = ["ollama/llama3.1:8b"]
+# When sensitivity == "high", prefer the locally hosted vLLM (Nemotron) configured
+# via VLLM_BASE_URL / VLLM_PLANNER_MODEL — falls back to the per-tier list if vLLM
+# is unavailable.
+SENSITIVE_PREFERENCE: list[str] = []
 
 
 def select_model(

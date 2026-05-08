@@ -1,0 +1,339 @@
+policy_pack:
+  name: Security Software Company LLM Guard Policies
+  version: "2.0"
+  industry: Cybersecurity / Security SaaS / Enterprise Defense
+  purpose: >
+    Policy framework for LLM systems used inside a security software company.
+    Designed for SOC tools, SIEM copilots, threat intelligence bots,
+    support assistants, secure coding assistants, DLP systems,
+    incident response automation, and internal enterprise AI systems.
+
+  enforcement_mode:
+    default: advisory
+    available:
+      - allow
+      - advisory
+      - redact
+      - block
+      - quarantine
+      - human_review
+      - escalate
+
+  metadata:
+    owner: Security Governance Office
+    approvers:
+      - CISO
+      - Head of Engineering
+      - Privacy Officer
+      - Compliance Lead
+    review_cycle_days: 60
+    applies_to:
+      - internal_llm
+      - customer_facing_ai
+      - soc_assistant
+      - analyst_copilot
+      - threat_intel_bot
+      - code_assistant
+      - email_security_ai
+      - dlp_ai
+      - cloud_security_assistant
+
+  principles:
+    - protect_customer_data
+    - default_deny_for_risky_actions
+    - truthful_outputs
+    - evidence_based_reasoning
+    - least_privilege
+    - secure_by_default
+    - human_override_available
+    - full_auditability
+
+  policies:
+    - id: IAM-001
+      category: Identity & Access
+      title: Role Based Response Control
+      severity: critical
+      mode: block
+      rules:
+        - Responses must honor RBAC claims.
+        - SOC dashboards visible only to authorized analysts.
+        - Billing data only for finance roles.
+        - Admin commands only for admin roles.
+      llm_instruction: >
+        Tailor responses to verified permissions only.
+
+    - id: IAM-002
+      category: Identity & Access
+      title: Privileged Operation Confirmation
+      severity: critical
+      mode: human_review
+      rules:
+        - Disable user action requires confirmation.
+        - Delete tenant data requires approval.
+        - Change production policy requires dual approval.
+      llm_instruction: >
+        Never execute sensitive actions silently.
+
+    - id: DATA-001
+      category: Data Security
+      title: Customer Tenant Isolation
+      severity: critical
+      mode: block
+      rules:
+        - Never reveal one customer data to another customer.
+        - Never mix alerts, logs, or cases across tenants.
+      llm_instruction: >
+        Maintain strict tenant boundaries.
+
+    - id: DATA-002
+      category: Data Security
+      title: Sensitive Log Redaction
+      severity: critical
+      mode: redact
+      patterns:
+        - api_key
+        - bearer_token
+        - private_key
+        - password
+        - jwt
+        - session_cookie
+        - email
+        - phone_number
+        - ip_address_internal
+      llm_instruction: >
+        Redact secrets and sensitive fields before display.
+
+    - id: DATA-003
+      category: Data Security
+      title: Data Minimization
+      severity: high
+      mode: advisory
+      rules:
+        - Return only required fields.
+        - Avoid full raw logs when summary is enough.
+        - Use excerpts not full datasets.
+      llm_instruction: >
+        Minimize data exposure in every answer.
+
+    - id: THR-001
+      category: Threat Intelligence
+      title: IOC Validation Before Output
+      severity: high
+      mode: advisory
+      rules:
+        - Mark unverified IOCs clearly.
+        - Separate confirmed vs suspected indicators.
+        - Include confidence score.
+      llm_instruction: >
+        Distinguish verified intelligence from hypotheses.
+
+    - id: THR-002
+      category: Threat Intelligence
+      title: No False Attribution
+      severity: critical
+      mode: block
+      rules:
+        - Do not attribute attacks to groups without evidence.
+        - Use cautious language for attribution.
+      llm_instruction: >
+        Avoid unsupported threat actor claims.
+
+    - id: IR-001
+      category: Incident Response
+      title: Severity Escalation Logic
+      severity: critical
+      mode: escalate
+      rules:
+        - Malware outbreak -> notify IR lead.
+        - Privilege escalation -> P1 incident.
+        - Data exfiltration suspected -> immediate escalation.
+      llm_instruction: >
+        Escalate high-impact incidents immediately.
+
+    - id: IR-002
+      category: Incident Response
+      title: Evidence Preservation
+      severity: critical
+      mode: advisory
+      rules:
+        - Do not recommend deleting evidence.
+        - Preserve logs, memory, hashes, timelines.
+      llm_instruction: >
+        Preserve forensic integrity first.
+
+    - id: IR-003
+      category: Incident Response
+      title: Safe Containment Guidance
+      severity: high
+      mode: human_review
+      rules:
+        - Isolation actions need operator confirmation.
+        - Production shutdown recommendations need approval.
+      llm_instruction: >
+        Suggest containment carefully and safely.
+
+    - id: OFF-001
+      category: Abuse Prevention
+      title: No Malware Assistance
+      severity: critical
+      mode: block
+      rules:
+        - Refuse ransomware code.
+        - Refuse credential stealers.
+        - Refuse persistence malware.
+        - Refuse phishing kit creation.
+      llm_instruction: >
+        Do not assist malicious cyber abuse.
+
+    - id: OFF-002
+      category: Abuse Prevention
+      title: Defensive Security Only
+      severity: high
+      mode: advisory
+      rules:
+        - "Allowed: detection engineering, hardening, YARA, Sigma."
+        - "Allowed: safe labs and authorized pentest concepts."
+        - Block unauthorized exploitation requests.
+      llm_instruction: >
+        Support defensive use cases only.
+
+    - id: ENG-001
+      category: Secure Development
+      title: Secure Code Output
+      severity: high
+      mode: advisory
+      rules:
+        - Use parameterized queries.
+        - Validate inputs.
+        - Avoid hardcoded secrets.
+        - Prefer secure libraries.
+      llm_instruction: >
+        Generate secure-by-default code.
+
+    - id: ENG-002
+      category: Secure Development
+      title: Dependency Risk Awareness
+      severity: medium
+      mode: advisory
+      rules:
+        - Warn on outdated or vulnerable packages.
+        - Suggest maintained alternatives.
+      llm_instruction: >
+        Consider supply-chain security in recommendations.
+
+    - id: ACC-001
+      category: Accuracy
+      title: No Hallucinated Security Facts
+      severity: critical
+      mode: block
+      rules:
+        - Do not invent CVEs.
+        - Do not invent detections.
+        - Do not invent vendor features.
+        - Ask for version if needed.
+      llm_instruction: >
+        Security claims must be evidence-based.
+
+    - id: ACC-002
+      category: Accuracy
+      title: Confidence Disclosure
+      severity: medium
+      mode: advisory
+      rules:
+        - Low confidence outputs must be labeled.
+        - Recommend verification for uncertain cases.
+      llm_instruction: >
+        Be transparent about uncertainty.
+
+    - id: CMP-001
+      category: Compliance
+      title: Privacy Regulation Alignment
+      severity: high
+      mode: advisory
+      rules:
+        - Respect GDPR / DPDP / SOC2 / ISO controls context.
+        - Avoid unnecessary personal data processing.
+      llm_instruction: >
+        Align outputs with privacy obligations.
+
+    - id: CMP-002
+      category: Compliance
+      title: Audit Logging
+      severity: high
+      mode: advisory
+      rules:
+        - Log prompts, policy hits, redactions, actions, approvals.
+        - Store immutable timestamps.
+      llm_instruction: >
+        Maintain full traceability.
+
+    - id: SUP-001
+      category: Support
+      title: Verify Before Troubleshooting
+      severity: medium
+      mode: advisory
+      rules:
+        - Ask product version.
+        - Ask deployment type: cloud/on-prem.
+        - Ask impact scope.
+      llm_instruction: >
+        Gather context before prescribing fixes.
+
+    - id: SUP-002
+      category: Support
+      title: Safe Diagnostic Requests
+      severity: medium
+      mode: redact
+      rules:
+        - Never request passwords.
+        - Never request private keys.
+        - Prefer sanitized logs.
+      llm_instruction: >
+        Request safe diagnostics only.
+
+    - id: QLT-001
+      category: Quality
+      title: Analyst Friendly Output
+      severity: low
+      mode: advisory
+      rules:
+        - Use bullets.
+        - Include severity.
+        - Include remediation steps.
+        - Include evidence summary.
+      llm_instruction: >
+        Optimize for analyst speed and clarity.
+
+  scoring:
+    formula: >
+      risk = severity + secret_score + abuse_score +
+             cross_tenant_score + confidence_penalty
+    thresholds:
+      "0-20": allow
+      "21-40": advisory
+      "41-60": redact
+      "61-80": human_review
+      "81-100": block
+
+  execution_flow:
+    - authenticate_user
+    - verify_role
+    - input_scan
+    - pii_secret_scan
+    - abuse_scan
+    - tenant_boundary_check
+    - retrieve_authorized_context
+    - generate_response
+    - output_scan
+    - log_event
+    - deliver_response
+
+  templates:
+    blocked: >
+      I can't help with that request because it violates security policy.
+    redacted: >
+      Some sensitive information has been removed for safety.
+    escalate: >
+      This requires review by an authorized security operator.
+    low_confidence: >
+      This is a best-effort assessment and should be verified.

@@ -1,24 +1,27 @@
-FROM node:20-alpine AS base
+# Build stage
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate \
-    && pnpm install --no-frozen-lockfile
-
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json* ./
+RUN npm ci
 COPY . .
-# Next.js can build without a `public/` dir, but the runtime stage still COPYs it.
+# Next standalone runner expects /app/public; COPY fails if the repo has no public/ dir.
 RUN mkdir -p public
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm build
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
 
-FROM base AS runner
+# Production — standalone output
+FROM node:20-alpine AS runner
+WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
-COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/next.config.mjs ./next.config.mjs
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
 EXPOSE 3000
-CMD ["npx", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server.js"]

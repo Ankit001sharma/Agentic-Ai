@@ -1,4 +1,4 @@
-.PHONY: up down logs seed demo test backend-dev frontend-dev
+.PHONY: up down logs seed demo test backend-dev
 
 up:
 	docker compose up --build -d
@@ -13,13 +13,16 @@ seed:
 	docker compose exec backend python -m infra.seed_jailbreaks
 
 demo:
-	@echo "Open http://localhost:3000/sandbox"
+	@echo "Gateway: curl http://localhost:8080/health"
 
 test:
 	docker compose exec backend pytest -q
 
 backend-dev:
-	cd backend && uv sync && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd backend && uv sync && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 frontend-dev:
-	cd frontend && pnpm install && pnpm dev
+	cd frontend && npm run dev
+
+frontend-ci:
+	cd frontend && npm ci && npm run lint && npm run typecheck && npm run build

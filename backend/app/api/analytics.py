@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import desc, func, select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import desc, func, or_, select
 
 from app.api.deps import require_api_key
 from app.db.models import FindingRow, Request, RiskGraphNode
@@ -29,14 +29,20 @@ async def summary(_: str = Depends(require_api_key)):
         ).scalar() or 0
         avg_risk = (await db.execute(select(func.avg(Request.risk)))).scalar() or 0
         avg_latency = (await db.execute(select(func.avg(Request.latency_ms)))).scalar() or 0
+        fallback_hits = (
+            await db.execute(select(func.count(Request.id)).where(Request.fallback_used.is_(True)))
+        ).scalar() or 0
         return {
             "total": int(total),
             "blocked": int(blocked),
             "masked": int(masked),
             "escalated": int(escalated),
             "block_rate": round((blocked / total * 100) if total else 0, 2),
+            "mask_rate": round((masked / total * 100) if total else 0, 2),
+            "escalation_rate": round((escalated / total * 100) if total else 0, 2),
             "avg_risk": round(float(avg_risk), 2),
             "avg_latency_ms": round(float(avg_latency), 2),
+            "fallback_rate": round((fallback_hits / total * 100) if total else 0, 2),
         }
 
 
@@ -96,11 +102,72 @@ async def top_risky_users(_: str = Depends(require_api_key)):
 
 
 @router.get("/recent")
-async def recent_requests(limit: int = 20, _: str = Depends(require_api_key)):
+async def recent_requests(
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    verdict: str | None = Query(None, description="Filter by input verdict"),
+    user_id: str | None = Query(None),
+    q: str | None = Query(None, description="Substring match on prompt"),
+    since: dt.datetime | None = Query(None),
+    until: dt.datetime | None = Query(None),
+    _: str = Depends(require_api_key),
+):
     async with SessionLocal() as db:
-        res = await db.execute(
-            select(Request).order_by(Request.created_at.desc()).limit(min(limit, 100))
+        stmt = select(Request)
+        if verdict:
+            stmt = stmt.where(Request.verdict == verdict.upper())
+        if user_id:
+            stmt = stmt.where(Request.user_id == user_id)
+        if q:
+            stmt = stmt.where(Request.prompt.ilike(f"%{q}%"))
+        if since:
+            stmt = stmt.where(Request.created_at >= since)
+        if until:
+            stmt = stmt.where(Request.created_at <= until)
+        stmt = stmt.order_by(Request.created_at.desc()).offset(offset).limit(min(limit, 200))
+        res = await db.execute(stmt)
+        rows = res.scalars().all()
+        return [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "verdict": r.verdict,
+                "output_verdict": r.output_verdict,
+                "risk": r.risk,
+                "output_risk": r.output_risk,
+                "model_used": r.selected_model,
+                "fallback": r.fallback_used,
+                "latency_ms": r.latency_ms,
+                "prompt_preview": (r.prompt or "")[:160],
+                "response_preview": (r.final_response or "")[:160],
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+
+
+@router.get("/recent/incidents")
+async def recent_incidents(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: str = Depends(require_api_key),
+):
+    """BLOCK, ESCALATE, or high output risk — for the incidents table."""
+    async with SessionLocal() as db:
+        stmt = (
+            select(Request)
+            .where(
+                or_(
+                    Request.verdict.in_(["BLOCK", "ESCALATE"]),
+                    Request.output_verdict == "BLOCK",
+                    Request.risk >= 70,
+                )
+            )
+            .order_by(Request.created_at.desc())
+            .offset(offset)
+            .limit(min(limit, 200))
         )
+        res = await db.execute(stmt)
         rows = res.scalars().all()
         return [
             {

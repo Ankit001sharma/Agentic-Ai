@@ -1,0 +1,46 @@
+# Pipeline configuration — overrides and extensions for specific stages.
+# Loaded at startup by the pipeline runner (currently advisory; enforcement
+# lives in the stage implementations themselves).
+
+stage_10_high_impact:
+
+  # These tool_ids always require a human reviewer to approve before execution.
+  # The Stage 10 gate queues the request to Redis and polls for a decision.
+  # Timeout is controlled by HIGH_IMPACT_REVIEW_TIMEOUT (default 300 s).
+  always_require_human:
+    - github_merge_pr
+    - github_create_release
+    - github_dismiss_alert
+    # Non-GitHub tools that were already high_impact=true in tools.yaml
+    - send_email
+    - close_github_issue
+    - send_slack_message
+
+  # Conditional rules: tool is routed to human review only when the condition
+  # evaluates to true at runtime.  The `condition` is a Python-style expression
+  # evaluated against the Stage 8 FunctionCallResult arguments dict.
+  conditional:
+    - tool_id: github_trigger_workflow
+      condition: "arguments.get('env') == 'production'"
+      route_to: human_review
+
+    - tool_id: github_delete_branch
+      condition: >
+        arguments.get('branch') in ('main', 'master', 'develop')
+        or str(arguments.get('branch', '')).startswith('release-')
+      route_to: human_review
+
+    - tool_id: github_update_file
+      # Defense-in-depth: branch protection should already block this, but we
+      # gate it here too so the audit trail shows an explicit review decision.
+      condition: "arguments.get('branch') in ('main', 'master')"
+      route_to: human_review
+
+  # How long (seconds) Stage 10 will wait for a human decision before blocking.
+  # Overrides HIGH_IMPACT_REVIEW_TIMEOUT env var when set.
+  approval_timeout_minutes: 15
+
+  # What to do when the approval window expires.
+  # "deny"    → safe default; the request is blocked.
+  # "approve" → auto-approve on timeout (only for low-sensitivity tenants).
+  on_timeout: deny

@@ -125,3 +125,6 @@ class SecretsScanner:
             last_end = end
         out_parts.append(text[cursor:])
         return "".join(out_parts), rm
+
+
+SecretsScanScanner = SecretsScanner

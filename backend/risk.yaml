@@ -1,0 +1,65 @@
+# Risk aggregation weights and thresholds
+# Each category weight is the maximum contribution (0-100 scale) when severity = 1.0
+
+categories:
+  PROMPT_INJECTION:
+    weight: 30
+    description: "Direct or indirect prompt injection attempts"
+  JAILBREAK:
+    weight: 30
+    description: "Attempts to bypass safety guidelines or system constraints"
+  ROLE_OVERRIDE:
+    weight: 22
+    description: "Attempts to override the assistant role or persona"
+  SYSTEM_PROMPT_EXTRACTION:
+    weight: 30
+    description: "Attempts to leak system prompt or internal configuration"
+  HIDDEN_INSTRUCTION:
+    weight: 25
+    description: "Concealed instructions (whitespace, encoding, invisible text)"
+  PII:
+    weight: 22
+    description: "Personally Identifiable Information detected in input"
+  SECRET:
+    weight: 28
+    description: "API keys, tokens, credentials, or other secrets"
+  TOXIC:
+    weight: 25
+    description: "Harmful, abusive, or harassing content"
+  CODE_IP:
+    weight: 18
+    description: "Proprietary code or intellectual property patterns"
+  REPEAT_ATTACK:
+    weight: 25
+    description: "Repeated attack pattern from the same user"
+  SPAM:
+    weight: 12
+    description: "Spam or bulk messaging patterns"
+  MALWARE:
+    weight: 35
+    description: "Malware creation or distribution requests"
+  RBAC_VIOLATION:
+    weight: 32
+    description: "Attempt to access resources beyond user's role"
+  UNVERIFIED_INTERNAL:
+    weight: 18
+    description: "Requests for unverified internal/confidential information"
+  NHI_VIOLATION:
+    weight: 28
+    description: "Non-human identity workload policy violation"
+  OTHER:
+    weight: 10
+    description: "Uncategorized security finding"
+
+# Multi-scanner agreement bonus per additional scanner beyond the first
+scanner_bonus: 3
+
+# Historical risk score contribution weight (0-10 range, user's past risk * this)
+historical_risk_weight: 10
+
+# Verdict thresholds (inclusive lower bound → exclusive upper bound)
+thresholds:
+  allow_max: 30      # score < 30  → ALLOW
+  mask_max: 70       # score < 70  → MASK
+  escalate_max: 90   # score < 90  → ESCALATE
+  # score >= 90 → BLOCK

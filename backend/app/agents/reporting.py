@@ -85,6 +85,7 @@ async def run(state: ScanState) -> ScanState:
                 embedding=vec,
             )
             db.add(row)
+            await db.flush()
             for f in state.findings:
                 db.add(
                     FindingRow(

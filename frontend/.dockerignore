@@ -1,10 +1,7 @@
-# Host artifacts must not overwrite the deps image node_modules
 node_modules
 .next
 .git
-.DS_Store
-*.log
+*.md
+playwright-report
+test-results
 .env*.local
-coverage
-npm-debug.log*
-.pnpm-store

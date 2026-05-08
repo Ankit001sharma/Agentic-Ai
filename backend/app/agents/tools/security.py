@@ -18,7 +18,8 @@ from app.scanners.regex_rules import RegexScanner
 from app.scanners.secrets_scan import SecretsScanner
 from app.scanners.toxicity import ToxicityScanner
 from app.scanners.vector_recall import VectorRecallScanner
-from app.schemas.sentinel import ScanState, Verdict
+from app.core.risk import effective_risk_score, to_verdict
+from app.schemas.sentinel import ScanState
 from app.agents.tools.base import ToolResult
 
 _REGEX = RegexScanner()
@@ -198,22 +199,6 @@ async def tool_run_full_input_scan(state: ScanState) -> ToolResult:
     )
 
 
-async def tool_memory_recall_similar(text: str, state: ScanState, k: int = 5) -> ToolResult:
-    """Episodic recall via pgvector similarity (past BLOCK/ESCALATE requests)."""
-    t0 = time.perf_counter()
-    from app.agents.memory import episodic
-
-    rows = await episodic.recall_similar_incidents_vector(text, k=k)
-    summary = "; ".join(f"{r.get('id')}:{r.get('verdict')} sim={r.get('similarity', 0):.2f}" for r in rows[:k])
-    return ToolResult(
-        ok=True,
-        name="memory_recall_similar",
-        summary=summary[:4000] or "no_matches",
-        data={"incidents": rows},
-        latency_ms=int((time.perf_counter() - t0) * 1000),
-    )
-
-
 async def tool_opa_base(state: ScanState) -> ToolResult:
     t0 = time.perf_counter()
     user = {
@@ -222,10 +207,11 @@ async def tool_opa_base(state: ScanState) -> ToolResult:
         "region": state.user.region,
         "historical_risk": state.user.historical_risk,
     }
+    risk_verdict = to_verdict(effective_risk_score(state))
     d = await _OPA.decide(
         user=user,
         model=state.requested_model,
-        verdict=state.verdict.value if hasattr(state.verdict, "value") else str(state.verdict),
+        verdict=risk_verdict.value,
         sensitivity=state.sensitivity,
     )
     return ToolResult(

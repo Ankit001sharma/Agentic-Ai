@@ -1,0 +1,701 @@
+# Tool Registry — each entry defines an executable tool available in the pipeline.
+# Stages 6, 7, 8, 9, 10, 11 operate on these definitions.
+#
+# Fields:
+#   id              - unique tool identifier used by Mistral intent detector
+#   name            - human-readable label
+#   description     - shown to LLMs for tool selection
+#   high_impact     - true → Stage 10 human review required
+#   simulate_supported - true → tool supports simulate=true dry-run
+#   timeout_seconds - hard timeout enforced at Stage 11
+#   required_roles  - OPA enforces this; empty = any authenticated user
+#   json_schema     - JSON Schema for tool arguments (Stage 6 validation + Stage 8 generation)
+
+tools:
+
+  - id: send_email
+    name: Send Email
+    description: >
+      Send an email to one or more recipients. Use for notifications,
+      reports, and user-triggered communications.
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 10
+    required_roles: []
+    json_schema:
+      type: object
+      required: [to, subject, body]
+      additionalProperties: false
+      properties:
+        to:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            format: email
+          description: "Recipient email addresses"
+        cc:
+          type: array
+          items:
+            type: string
+            format: email
+          description: "CC recipients (optional)"
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: "Email subject line"
+        body:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: "Plain text or HTML email body"
+        simulate:
+          type: boolean
+          default: false
+          description: "Dry-run mode — validate without sending"
+
+  - id: create_github_issue
+    name: Create GitHub Issue
+    description: >
+      Create a new issue in a GitHub repository with title, body, and labels.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    json_schema:
+      type: object
+      required: [repo, title, body]
+      additionalProperties: false
+      properties:
+        repo:
+          type: string
+          pattern: "^[\\w.-]+/[\\w.-]+$"
+          description: "GitHub repo in owner/name format"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: "Issue title"
+        body:
+          type: string
+          maxLength: 65536
+          description: "Issue body (Markdown)"
+        labels:
+          type: array
+          items:
+            type: string
+          description: "Labels to attach"
+        assignees:
+          type: array
+          items:
+            type: string
+          description: "GitHub usernames to assign"
+        simulate:
+          type: boolean
+          default: false
+
+  - id: close_github_issue
+    name: Close GitHub Issue
+    description: >
+      Close an existing GitHub issue (destructive — triggers high-impact gate).
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    json_schema:
+      type: object
+      required: [repo, issue_number]
+      additionalProperties: false
+      properties:
+        repo:
+          type: string
+          pattern: "^[\\w.-]+/[\\w.-]+$"
+        issue_number:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 65536
+          description: "Optional closing comment"
+        simulate:
+          type: boolean
+          default: false
+
+  - id: send_slack_message
+    name: Send Slack Message
+    description: >
+      Send a message to a Slack channel or direct message to a user.
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 10
+    required_roles: []
+    json_schema:
+      type: object
+      required: [channel, text]
+      additionalProperties: false
+      properties:
+        channel:
+          type: string
+          description: "Channel ID (C...) or user ID (U...) or #channel-name"
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: "Message text (Slack mrkdwn supported)"
+        blocks:
+          type: array
+          description: "Optional Slack Block Kit payload"
+        simulate:
+          type: boolean
+          default: false
+
+  - id: search_web
+    name: Search Web
+    description: >
+      Search the public web using Tavily and return summarised results.
+      Use for factual lookups, news, documentation, and research tasks.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 30
+    required_roles: []
+    json_schema:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+          minLength: 3
+          maxLength: 400
+          description: "Search query string"
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: "Number of results to return"
+        search_depth:
+          type: string
+          enum: [basic, advanced]
+          default: basic
+          description: "Tavily search depth"
+        include_answer:
+          type: boolean
+          default: true
+          description: "Include Tavily's synthesized answer"
+
+  - id: search_docs
+    name: Search Documentation
+    description: >
+      Semantic search over internal documentation using Qdrant vector DB.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 10
+    required_roles: []
+    json_schema:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+          minLength: 3
+          maxLength: 400
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+        collection:
+          type: string
+          default: "docs"
+          description: "Qdrant collection name"
+
+  # ── GitHub tools ────────────────────────────────────────────────────────────
+
+  - id: github_create_issue
+    name: GitHub — Create Issue
+    description: >
+      Create a new issue in a GitHub repository with title, body, and labels.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, title, body]
+      properties:
+        repo:      { type: string, pattern: "^[\\w.-]+/[\\w.-]+$" }
+        title:     { type: string, maxLength: 200 }
+        body:      { type: string, maxLength: 30000 }
+        labels:    { type: array, items: { type: string }, maxItems: 20 }
+        assignees: { type: array, items: { type: string }, maxItems: 10 }
+        milestone: { type: integer }
+        simulate:  { type: boolean, default: false }
+
+  - id: github_update_issue
+    name: GitHub — Update Issue
+    description: >
+      Edit the title, body, labels, or state of an existing GitHub issue.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, issue_number]
+      properties:
+        repo:         { type: string, pattern: "^[\\w.-]+/[\\w.-]+$" }
+        issue_number: { type: integer, minimum: 1 }
+        title:        { type: string, maxLength: 200 }
+        body:         { type: string, maxLength: 30000 }
+        state:        { type: string, enum: [open, closed] }
+        labels:       { type: array, items: { type: string }, maxItems: 20 }
+        assignees:    { type: array, items: { type: string }, maxItems: 10 }
+        simulate:     { type: boolean, default: false }
+
+  - id: github_close_issue
+    name: GitHub — Close Issue
+    description: >
+      Close an existing GitHub issue (optionally posting a closing comment).
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, issue_number]
+      properties:
+        repo:         { type: string, pattern: "^[\\w.-]+/[\\w.-]+$" }
+        issue_number: { type: integer, minimum: 1 }
+        state_reason: { type: string, enum: [completed, not_planned], default: completed }
+        comment:      { type: string, maxLength: 65536 }
+        simulate:     { type: boolean, default: false }
+
+  - id: github_comment_on_issue
+    name: GitHub — Comment on Issue
+    description: >
+      Post a comment on an existing GitHub issue.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, issue_number, body]
+      properties:
+        repo:         { type: string }
+        issue_number: { type: integer, minimum: 1 }
+        body:         { type: string, maxLength: 65536 }
+        simulate:     { type: boolean, default: false }
+
+  - id: github_create_pr
+    name: GitHub — Create Pull Request
+    description: >
+      Open a pull request from one branch to another. Defaults to draft.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, title, body, base, head]
+      properties:
+        repo:      { type: string, pattern: "^[\\w.-]+/[\\w.-]+$" }
+        title:     { type: string, maxLength: 200 }
+        body:      { type: string, maxLength: 30000 }
+        base:      { type: string }
+        head:      { type: string }
+        draft:     { type: boolean, default: true }
+        reviewers: { type: array, items: { type: string }, maxItems: 15 }
+        labels:    { type: array, items: { type: string }, maxItems: 20 }
+        simulate:  { type: boolean, default: false }
+
+  - id: github_merge_pr
+    name: GitHub — Merge Pull Request
+    description: >
+      Merge a pull request. HIGH IMPACT — always requires human review gate.
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 20
+    required_roles: [admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, pr_number]
+      properties:
+        repo:           { type: string, pattern: "^[\\w.-]+/[\\w.-]+$" }
+        pr_number:      { type: integer, minimum: 1 }
+        merge_method:   { type: string, enum: [merge, squash, rebase], default: squash }
+        commit_title:   { type: string, maxLength: 200 }
+        commit_message: { type: string, maxLength: 30000 }
+        simulate:       { type: boolean, default: false }
+
+  - id: github_get_pr_diff
+    name: GitHub — Get PR Diff
+    description: >
+      Fetch the unified diff of a pull request for review or analysis.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, pr_number]
+      properties:
+        repo:      { type: string }
+        pr_number: { type: integer, minimum: 1 }
+
+  - id: github_comment_on_pr
+    name: GitHub — Comment on PR
+    description: >
+      Post a top-level review comment on a pull request.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, pr_number, body]
+      properties:
+        repo:      { type: string }
+        pr_number: { type: integer, minimum: 1 }
+        body:      { type: string, maxLength: 30000 }
+        simulate:  { type: boolean, default: false }
+
+  - id: github_list_open_prs
+    name: GitHub — List Open PRs
+    description: >
+      List open pull requests in a repository, optionally filtered by author or label.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo]
+      properties:
+        repo:   { type: string }
+        author: { type: string }
+        label:  { type: string }
+
+  - id: github_get_file_contents
+    name: GitHub — Get File Contents
+    description: >
+      Read a file from a repository at a given ref. Output is scanned for secrets.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: []
+    sanitize_output: true
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, path]
+      properties:
+        repo: { type: string }
+        path: { type: string }
+        ref:  { type: string, default: "HEAD" }
+
+  - id: github_update_file
+    name: GitHub — Update File
+    description: >
+      Write or update a file in a repository on a branch (cannot push to default branch directly).
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 20
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, path, content, branch, commit_message]
+      properties:
+        repo:           { type: string }
+        path:           { type: string }
+        content:        { type: string, maxLength: 1000000 }
+        branch:         { type: string }
+        commit_message: { type: string, maxLength: 200 }
+        sha:            { type: string }
+        simulate:       { type: boolean, default: false }
+
+  - id: github_search_code
+    name: GitHub — Search Code
+    description: >
+      Search code across accessible repositories using GitHub code search.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 20
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [query]
+      properties:
+        query:    { type: string, minLength: 1, maxLength: 500 }
+        repo:     { type: string }
+        language: { type: string }
+
+  - id: github_create_branch
+    name: GitHub — Create Branch
+    description: >
+      Create a new branch in a repository from a given ref.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, branch]
+      properties:
+        repo:     { type: string }
+        branch:   { type: string }
+        from_ref: { type: string, default: "HEAD" }
+        simulate: { type: boolean, default: false }
+
+  - id: github_trigger_workflow
+    name: GitHub — Trigger Workflow
+    description: >
+      Dispatch a workflow_dispatch event. Production deploys are high impact.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 20
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, workflow, ref]
+      properties:
+        repo:     { type: string }
+        workflow: { type: string }
+        ref:      { type: string }
+        inputs:   { type: object }
+        env:      { type: string, enum: [dev, staging, production] }
+        simulate: { type: boolean, default: false }
+
+  - id: github_get_workflow_run
+    name: GitHub — Get Workflow Run
+    description: >
+      Fetch status and metadata for a specific workflow run.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, run_id]
+      properties:
+        repo:   { type: string }
+        run_id: { type: integer }
+
+  - id: github_get_workflow_logs
+    name: GitHub — Get Workflow Logs
+    description: >
+      Fetch logs for a workflow run; used for CI failure diagnosis.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 20
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, run_id]
+      properties:
+        repo:   { type: string }
+        run_id: { type: integer }
+
+  - id: github_rerun_failed_jobs
+    name: GitHub — Re-run Failed Jobs
+    description: >
+      Re-trigger only the failed jobs from a workflow run.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, run_id]
+      properties:
+        repo:    { type: string }
+        run_id:  { type: integer }
+        simulate: { type: boolean, default: false }
+
+  - id: github_cancel_workflow_run
+    name: GitHub — Cancel Workflow Run
+    description: >
+      Cancel an in-progress workflow run.
+    high_impact: false
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, run_id]
+      properties:
+        repo:    { type: string }
+        run_id:  { type: integer }
+        simulate: { type: boolean, default: false }
+
+  - id: github_create_release
+    name: GitHub — Create Release
+    description: >
+      Cut a new GitHub release with a tag and release notes. HIGH IMPACT.
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 20
+    required_roles: [admin, sre]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, tag_name, name, body]
+      properties:
+        repo:             { type: string }
+        tag_name:         { type: string, pattern: "^v?\\d+\\.\\d+\\.\\d+" }
+        name:             { type: string, maxLength: 200 }
+        body:             { type: string, maxLength: 100000 }
+        target_commitish: { type: string }
+        prerelease:       { type: boolean, default: false }
+        draft:            { type: boolean, default: false }
+        simulate:         { type: boolean, default: false }
+
+  - id: github_list_dependabot_alerts
+    name: GitHub — List Dependabot Alerts
+    description: >
+      List vulnerable dependency alerts in a repository, filtered by severity.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: [engineer, admin, sre, security_admin]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo]
+      properties:
+        repo:     { type: string }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        state:    { type: string, enum: [open, fixed, dismissed], default: open }
+
+  - id: github_dismiss_alert
+    name: GitHub — Dismiss Security Alert
+    description: >
+      Mark a Dependabot / code-scanning / secret-scanning alert as resolved. HIGH IMPACT.
+    high_impact: true
+    simulate_supported: true
+    timeout_seconds: 15
+    required_roles: [security_admin]
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo, alert_type, alert_id, dismissed_reason]
+      properties:
+        repo:             { type: string }
+        alert_type:       { type: string, enum: [dependabot, code_scanning, secret_scanning] }
+        alert_id:         { type: integer }
+        dismissed_reason: { type: string, enum: [false_positive, wont_fix, used_in_tests, fix_started] }
+        comment:          { type: string, maxLength: 1000 }
+        simulate:         { type: boolean, default: false }
+
+  - id: github_lookup_user
+    name: GitHub — Lookup User
+    description: >
+      Fetch public profile information for a GitHub user by handle.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 10
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [username]
+      properties:
+        username: { type: string }
+
+  - id: github_get_codeowners
+    name: GitHub — Get CODEOWNERS
+    description: >
+      Read the CODEOWNERS file from a repository to find code owners.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 10
+    required_roles: []
+    mcp_server: github-mcp-server
+    json_schema:
+      type: object
+      required: [repo]
+      properties:
+        repo: { type: string }
+        ref:  { type: string, default: "HEAD" }
+
+  - id: query_miniorange_docs
+    name: Query miniOrange Docs
+    description: >
+      Search the miniOrange documentation knowledge base for plugin integration
+      guides, OAuth/SAML setup, SSO troubleshooting, and API configuration.
+      Returns top matching docs with optional Mistral AI synthesis.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 15
+    required_roles: []
+    json_schema:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+          minLength: 2
+          maxLength: 400
+          description: "Search query, e.g. 'Joomla SAML SSO setup'"
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+          description: "Max documentation results to return"
+
+  - id: list_miniorange_plugins
+    name: List miniOrange Plugins
+    description: >
+      Return a sorted list of all miniOrange plugin and service titles
+      available in the documentation index.
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 5
+    required_roles: []
+    json_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+
+  - id: get_miniorange_plugin
+    name: Get miniOrange Plugin Details
+    description: >
+      Retrieve auth type, required credentials, setup steps, and environment
+      template for a specific miniOrange service (e.g. OAuth, SAML, Joomla SSO).
+    high_impact: false
+    simulate_supported: false
+    timeout_seconds: 5
+    required_roles: []
+    json_schema:
+      type: object
+      required: [service]
+      additionalProperties: false
+      properties:
+        service:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: "Service name, e.g. 'OAuth', 'Joomla SAML SSO'"

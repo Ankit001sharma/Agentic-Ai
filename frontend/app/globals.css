@@ -1,110 +1,68 @@
 @tailwind base;
-
 @tailwind components;
-
 @tailwind utilities;
 
-
-
-:root {
-
-  color-scheme: light;
-
-}
-
-
-
-html,
-
-body {
-
-  background: #ffffff;
-
-  color: #1f2937;
-
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter",
-
-    sans-serif;
-
-}
-
-
-
-* {
-
-  box-sizing: border-box;
-
-}
-
-
-
-::-webkit-scrollbar {
-
-  width: 8px;
-
-  height: 8px;
-
-}
-
-::-webkit-scrollbar-track {
-
-  background: transparent;
-
-}
-
-::-webkit-scrollbar-thumb {
-
-  background: #d1d5db;
-
-  border-radius: 4px;
-
-}
-
-::-webkit-scrollbar-thumb:hover {
-
-  background: #9ca3af;
-
-}
-
-
-
-@layer components {
-
-  .panel {
-
-    @apply bg-panel border border-line rounded-xl;
-
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 13% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 18%;
+    /* miniOrange #FF7300 */
+    --primary: 24 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 13% 18%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 24 100% 96%;
+    --accent-foreground: 24 100% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 24 100% 50%;
+    --radius: 0.625rem;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --danger: 0 84% 60%;
+    --info: 199 89% 48%;
   }
 
-  .panel-pad {
-
-    @apply panel p-4;
-
+  .dark {
+    --background: 220 20% 6%;
+    --foreground: 220 14% 96%;
+    --card: 220 18% 10%;
+    --card-foreground: 220 14% 96%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 220 14% 96%;
+    --primary: 24 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 16%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 220 16% 16%;
+    --muted-foreground: 220 9% 60%;
+    --accent: 24 40% 18%;
+    --accent-foreground: 24 100% 85%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 18%;
+    --input: 220 16% 18%;
+    --ring: 24 100% 50%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --danger: 0 62% 50%;
+    --info: 199 89% 48%;
   }
-
-  .btn {
-
-    @apply px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-line bg-panel2 hover:bg-line text-text;
-
-  }
-
-  .btn-primary {
-
-    @apply px-3 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-[#E0670A];
-
-  }
-
-  .btn-danger {
-
-    @apply px-3 py-2 rounded-lg text-sm font-medium bg-danger/90 text-white hover:bg-danger;
-
-  }
-
-  .chip {
-
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border;
-
-  }
-
 }
 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

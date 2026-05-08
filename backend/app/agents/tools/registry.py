@@ -43,6 +43,28 @@ OPENAI_SUPERVISOR_TOOLS: list[dict[str, Any]] = [
     _func_schema("delegate_to_model_router", "Select upstream model and fallback chain", {}),
     _func_schema("delegate_to_human_escalation", "Decide if human review needed; emit brief", {}),
     _func_schema(
+        "query_miniorange_docs",
+        "Search miniOrange plugin documentation (OAuth, SAML, SSO, LDAP, 2FA, WordPress, Joomla, Drupal, etc.) for integration guides, setup instructions, and troubleshooting. Returns top matching docs with optional AI synthesis.",
+        {
+            "query": {"type": "string", "description": "Search query, e.g. 'Joomla SAML SSO setup'"},
+            "top_k": {"type": "integer", "description": "Max docs to return (default 3)"},
+        },
+        required=["query"],
+    ),
+    _func_schema(
+        "list_miniorange_plugins",
+        "List all miniOrange plugin/service titles available in the documentation index.",
+        {},
+    ),
+    _func_schema(
+        "get_miniorange_plugin",
+        "Get auth type, required credentials, setup steps, and env template for a specific miniOrange plugin/service.",
+        {
+            "service": {"type": "string", "description": "Service name, e.g. 'OAuth', 'Joomla SAML SSO'"},
+        },
+        required=["service"],
+    ),
+    _func_schema(
         "emit_explanation_card",
         "Terminal: emit final verdict, confidence, headline, reasons",
         {
@@ -91,6 +113,15 @@ OPENAI_SUPERVISOR_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+def supervisor_tool_names_hint() -> str:
+    names: list[str] = []
+    for spec in OPENAI_SUPERVISOR_TOOLS:
+        fn = spec.get("function")
+        if isinstance(fn, dict) and fn.get("name"):
+            names.append(str(fn["name"]))
+    return ", ".join(names)
+
+
 async def dispatch(
     name: str,
     args: dict[str, Any],
@@ -127,11 +158,17 @@ async def dispatch(
     if name == "opa_evaluate":
         return await security.tool_opa_base(state)
 
-    if name.startswith("delegate_"):
-        from app.agents.specialists import run_specialist
+    if name == "query_miniorange_docs":
+        from app.agents.tools.miniorange import tool_query_miniorange_docs
+        return await tool_query_miniorange_docs(args.get("query") or state.prompt, state)
 
-        r = await run_specialist(name.replace("delegate_to_", ""), state)
-        return r
+    if name == "list_miniorange_plugins":
+        from app.agents.tools.miniorange import tool_list_miniorange_plugins
+        return await tool_list_miniorange_plugins(state)
+
+    if name == "get_miniorange_plugin":
+        from app.agents.tools.miniorange import tool_get_miniorange_plugin
+        return await tool_get_miniorange_plugin(args.get("service", ""), state)
 
     if name == "emit_explanation_card":
         state.explanation_draft = dict(args)
@@ -143,10 +180,11 @@ async def dispatch(
             latency_ms=int((time.perf_counter() - t0) * 1000),
         )
 
+    hint = supervisor_tool_names_hint()
     return ToolResult(
         ok=False,
         name=name,
-        summary="unknown_tool",
+        summary=f"unknown_tool; use one of: {hint}"[:8000],
         error="unknown",
         latency_ms=int((time.perf_counter() - t0) * 1000),
     )

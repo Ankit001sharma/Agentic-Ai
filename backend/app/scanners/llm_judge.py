@@ -34,7 +34,7 @@ class LLMJudgeScanner:
         s = get_settings()
         self.model = model or s.vllm_judge_model or s.default_model
         self.enabled = bool(
-            s.vllm_base_url or s.openai_api_key or s.anthropic_api_key or s.ollama_base_url
+            s.vllm_base_url or s.openai_api_key or s.anthropic_api_key or s.mistral_api_key
         )
         self._vllm = bool(s.vllm_base_url)
 

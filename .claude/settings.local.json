@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(dir \"c:/Users/miniOrange/Projects/Ai Project/Agentic ai/backend/app/pipeline\")",
+      "Bash(dir \"c:/Users/miniOrange/Projects/Ai Project/Agentic ai/backend/app/tools\")",
+      "Bash(dir \"c:/Users/miniOrange/Projects/Ai Project/Agentic ai/backend/app/memory\")",
+      "Bash(dir \"c:/Users/miniOrange/Projects/Ai Project/Agentic ai/backend/app/agents/tools/\")"
+    ]
+  }
+}

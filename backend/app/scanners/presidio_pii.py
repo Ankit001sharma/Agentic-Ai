@@ -149,3 +149,6 @@ class PIIPresidioScanner:
             last_end = end
         out_parts.append(text[cursor:])
         return "".join(out_parts), redaction_map
+
+
+PresidioPIIScanner = PIIPresidioScanner
