@@ -41,11 +41,25 @@ export async function apiFetch<T>(
     headers: rest.headers as HeadersInit,
   });
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers,
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeoutMs = 15_000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`${path}: request timed out after ${timeoutMs / 1000}s (is the backend up at ${API_URL}?)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${path} ${res.status}: ${text.slice(0, 200)}`);

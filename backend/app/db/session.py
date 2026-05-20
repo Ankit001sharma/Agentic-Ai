@@ -17,7 +17,12 @@ from app.db.models import Base
 log = get_logger("db")
 
 _settings = get_settings()
-engine = create_async_engine(_settings.database_url, echo=False, pool_pre_ping=True)
+engine = create_async_engine(
+    _settings.database_url,
+    echo=False,
+    pool_pre_ping=True,
+    connect_args={"timeout": 10},
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 

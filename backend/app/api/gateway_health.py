@@ -27,8 +27,10 @@ async def gateway_health(_: str = Depends(require_api_key)) -> dict[str, Any]:
     async def _pg() -> str:
         try:
             async with SessionLocal() as db:
-                await db.execute(text("SELECT 1"))
+                await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=5.0)
             return "ok"
+        except TimeoutError:
+            return "error: postgres probe timed out after 5s"
         except Exception as e:  # noqa: BLE001
             return f"error: {e}"
 

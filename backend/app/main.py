@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -26,10 +27,15 @@ async def lifespan(app: FastAPI):
     app.state.redis = aioredis.from_url(s.redis_url, decode_responses=True)
 
     try:
-        await probe_vllm_tooling()
+        await asyncio.wait_for(probe_vllm_tooling(), timeout=20.0)
+    except TimeoutError:
+        log.warning("vllm_probe_timeout")
     except Exception as e:  # noqa: BLE001
         log.warning("vllm_probe_error", error=str(e))
-    await init_db()
+    try:
+        await asyncio.wait_for(init_db(), timeout=15.0)
+    except TimeoutError:
+        log.warning("db_init_timeout")
     yield
 
     await app.state.redis.aclose()

@@ -7,6 +7,10 @@ COPY . .
 # Next standalone runner expects /app/public; COPY fails if the repo has no public/ dir.
 RUN mkdir -p public
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_SENTINEL_KEY=demo-key
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SENTINEL_KEY=$NEXT_PUBLIC_SENTINEL_KEY
 RUN npm run build
 
 # Production — standalone output
